@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dualite-config
+  namespace: dualite
+data:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "dualite"
+  RABBITMQ_HOST: "rabbitmq-service"
+  RABBITMQ_PORT: "5672"
+  EMAIL_NLP_SERVICE_URL: "http://dualite-email-nlp:8000"
+  INVOICE_PARSER_SERVICE_URL: "http://dualite-invoice-parser:8001"

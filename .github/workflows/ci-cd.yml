@@ -1,0 +1,201 @@
+name: Dualite CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  build_dotnet:
+    name: Build .NET API
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Restore dependencies
+      run: dotnet restore Dualite/Dualite.sln
+    
+    - name: Build
+      run: dotnet build Dualite/Dualite.sln --configuration Release --no-restore
+    
+    - name: Test
+      run: dotnet test Dualite/Dualite.sln --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
+    
+    - name: Upload .NET artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dotnet-app
+        path: Dualite/Dualite/bin/Release/net8.0/
+
+  build_python_email_nlp:
+    name: Build Email NLP Python Service
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      working-directory: ./Dualite.Python
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pytest pytest-cov
+        pip install -r requirements.txt
+    
+    - name: Lint with flake8
+      working-directory: ./Dualite.Python/email_nlp_service
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+    
+    - name: Test with pytest
+      working-directory: ./Dualite.Python/email_nlp_service
+      run: |
+        pytest --cov=app tests/
+    
+    - name: Upload Python Email NLP artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: email-nlp-service
+        path: Dualite.Python/email_nlp_service/
+
+  build_python_invoice_parser:
+    name: Build Invoice Parser Python Service
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      working-directory: ./Dualite.Python
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pytest pytest-cov
+        pip install -r requirements.txt
+    
+    - name: Lint with flake8
+      working-directory: ./Dualite.Python/invoice_parser_service
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+    
+    - name: Test with pytest
+      working-directory: ./Dualite.Python/invoice_parser_service
+      run: |
+        pytest --cov=app tests/
+    
+    - name: Upload Python Invoice Parser artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: invoice-parser-service
+        path: Dualite.Python/invoice_parser_service/
+
+  docker_build:
+    name: Build Docker Images
+    needs: [build_dotnet, build_python_email_nlp, build_python_invoice_parser]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+    
+    - name: Build and push API Gateway image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dualite/Dockerfile
+        push: true
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/dualite-api:${{ github.sha }}
+    
+    - name: Build and push Email NLP Service image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./Dualite.Python/email_nlp_service
+        file: ./Dualite.Python/email_nlp_service/Dockerfile
+        push: true
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/dualite-email-nlp:${{ github.sha }}
+    
+    - name: Build and push Invoice Parser Service image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./Dualite.Python/invoice_parser_service
+        file: ./Dualite.Python/invoice_parser_service/Dockerfile
+        push: true
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/dualite-invoice-parser:${{ github.sha }}
+
+  deploy_dev:
+    name: Deploy to Development
+    needs: docker_build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment: development
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Update deployment manifest
+      run: |
+        # Update Kubernetes manifests with new image tags
+        sed -i 's|image:.*dualite-api:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/dualite-api:${{ github.sha }}|' ./k8s/api-gateway-deployment.yaml
+        sed -i 's|image:.*dualite-email-nlp:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/dualite-email-nlp:${{ github.sha }}|' ./k8s/email-nlp-deployment.yaml
+        sed -i 's|image:.*dualite-invoice-parser:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/dualite-invoice-parser:${{ github.sha }}|' ./k8s/invoice-parser-deployment.yaml
+    
+    - name: Deploy to Kubernetes
+      uses: actions-hub/kubectl@master
+      env:
+        KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_DEV }}
+      with:
+        args: apply -f ./k8s/
+
+  deploy_prod:
+    name: Deploy to Production
+    needs: docker_build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Update deployment manifest
+      run: |
+        # Update Kubernetes manifests with new image tags
+        sed -i 's|image:.*dualite-api:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/dualite-api:${{ github.sha }}|' ./k8s/api-gateway-deployment.yaml
+        sed -i 's|image:.*dualite-email-nlp:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/dualite-email-nlp:${{ github.sha }}|' ./k8s/email-nlp-deployment.yaml
+        sed -i 's|image:.*dualite-invoice-parser:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/dualite-invoice-parser:${{ github.sha }}|' ./k8s/invoice-parser-deployment.yaml
+    
+    - name: Deploy to Kubernetes
+      uses: actions-hub/kubectl@master
+      env:
+        KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_PROD }}
+      with:
+        args: apply -f ./k8s/

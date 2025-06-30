@@ -1,0 +1,96 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+[Bb]in/
+[Oo]bj/
+*.exe
+*.dll
+*.pdb
+*.cache
+*.mdb
+*.log
+*.vspscc
+*.vssscc
+*.dbmdl
+*.dbproj.schemaview
+*.dbproj.user
+*.dbproj.vspscc
+*.pidb
+*.svclog
+*.scc
+*.suo
+*.user
+*.aps
+*.ncb
+*.opendb
+*.opensdf
+*.sdf
+*.cachefile
+*.VC.db
+*.VC.VC.opendb
+
+# Python
+*.pyc
+*.pyo
+__pycache__/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+$RECYCLE.BIN/
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# Node
+node_modules/
+
+# Netlify
+netlify/
+netlify.toml
+
+# Logs
+*.log
+
+# Misc
+*.swp
+*.bak
+*.tmp
+*.old
+*.orig
+*.rej
+*.sublime-workspace
+*.sublime-project
+.idea/
+*.iml
+*.vscode/
+
+# Solution-specific
+Dualite.Models/Requests/
+Dualite.Models/Responses/
+Dualite.Python/email_nlp_service/requirements.txt
+Dualite.Python/invoice_parser_service/requirements.txt
+
+# SQLite
+*.sqlite
+*.db
+
+# Ignore environment variable docs
+netlify-env-variables.md
+rapidapi-preparation.md
+netlify-git-integration.md
+
+# Ignore test output
+TestResults/

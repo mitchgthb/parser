@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  # .NET API Gateway
+  api-gateway:
+    build:
+      context: ./
+      dockerfile: Dualite/Dockerfile
+    ports:
+      - "8080:8080"
+      - "8443:443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=docprocessing;Username=postgres;Password=postgres123
+      - Redis__ConnectionString=redis:6379
+      - RabbitMQ__HostName=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__UserName=guest
+      - RabbitMQ__Password=guest
+      - EmailNlpService__BaseUrl=http://email-nlp-service:8000
+      - InvoiceParserService__BaseUrl=http://invoice-parser-service:8001
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - email-nlp-service
+      - invoice-parser-service
+    networks:
+      - dualite-network
+
+  # Email NLP Service
+  email-nlp-service:
+    build:
+      context: ./Dualite.Python/email_nlp_service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=docprocessing
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=guest
+      - RABBITMQ_PASSWORD=guest
+      - RABBITMQ_QUEUE=email_processing
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - dualite-network
+
+  # Invoice Parser Service
+  invoice-parser-service:
+    build:
+      context: ./Dualite.Python/invoice_parser_service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=docprocessing
+      - DB_USER=postgres
+      - DB_PASSWORD=CDn@NM&8N!#9aC6f
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=guest
+      - RABBITMQ_PASSWORD=guest
+      - RABBITMQ_QUEUE=invoice_processing
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - dualite-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+      - POSTGRES_DB=docprocessing
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - dualite-network
+
+  # Redis Cache
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - dualite-network
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - dualite-network
+
+networks:
+  dualite-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:

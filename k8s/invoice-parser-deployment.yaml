@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dualite-invoice-parser
+  namespace: dualite
+  labels:
+    app: dualite-invoice-parser
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dualite-invoice-parser
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: dualite-invoice-parser
+    spec:
+      containers:
+      - name: invoice-parser
+        image: dualite/dualite-invoice-parser:latest
+        ports:
+        - containerPort: 8001
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: dualite-config
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: dualite-config
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: dualite-config
+              key: DB_NAME
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: dualite-secrets
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dualite-secrets
+              key: DB_PASSWORD
+        - name: RABBITMQ_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: dualite-config
+              key: RABBITMQ_HOST
+        - name: RABBITMQ_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: dualite-config
+              key: RABBITMQ_PORT
+        - name: RABBITMQ_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: dualite-secrets
+              key: RABBITMQ_USERNAME
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dualite-secrets
+              key: RABBITMQ_PASSWORD
+        - name: RABBITMQ_QUEUE
+          value: "invoice_processing"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: dualite-secrets
+              key: REDIS_URL
+        - name: REDIS_DEFAULT_TTL
+          value: "3600"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: OCR_ENABLED
+          value: "true"
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dualite-invoice-parser
+  namespace: dualite
+spec:
+  selector:
+    app: dualite-invoice-parser
+  ports:
+  - port: 8001
+    targetPort: 8001
+  type: ClusterIP

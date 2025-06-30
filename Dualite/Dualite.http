@@ -1,0 +1,6 @@
+@Dualite_HostAddress = http://localhost:5112
+
+GET {{Dualite_HostAddress}}/
+Accept: application/json
+
+###
