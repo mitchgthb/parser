@@ -1,16 +1,17 @@
+[build]
+builder = "docker"
+
+[deploy]
+strategy = "dockerfile"
+
 [phases.setup]
-aptPkgs = ['wget', 'curl']
+image = "mcr.microsoft.com/dotnet/sdk:8.0"
 
 [phases.build]
 cmds = [
-  'wget https://dot.net/v1/dotnet-install.sh',
-  'chmod +x dotnet-install.sh',
-  './dotnet-install.sh --channel 8.0',
-  'export PATH="$HOME/.dotnet:$PATH"',
-  'dotnet --list-sdks',
   'dotnet restore',
-  'dotnet build -c Release'
+  'dotnet publish -c Release -o out'
 ]
 
 [start]
-cmd = 'dotnet Dualite/bin/Release/net8.0/Dualite.dll'
+cmd = "dotnet out/Dualite.dll"
