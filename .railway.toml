@@ -1,6 +1,5 @@
 [build]
-builder = "nixpacks"
-buildCommand = "echo 'Using Nixpacks for building .NET 8.0 application'"
+builder = "docker"
 
 [deploy]
 restartPolicyType = "on-failure"
