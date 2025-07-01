@@ -4,6 +4,7 @@ import logging
 import asyncio
 from typing import Dict, Any, Callable, Optional
 import os
+import ssl
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,11 +15,16 @@ class MessageQueueService:
     
     def __init__(self):
         """Initialize the message queue service"""
+        # First check if we have a full RABBITMQ_URL (preferred for CloudAMQP)
+        self.url = os.getenv("RABBITMQ_URL")
+        
         # Get configuration from environment variables or use defaults
         self.host = os.getenv("RABBITMQ_HOST", "localhost")
         self.port = int(os.getenv("RABBITMQ_PORT", "5672"))
         self.username = os.getenv("RABBITMQ_USERNAME", "guest")
         self.password = os.getenv("RABBITMQ_PASSWORD", "guest")
+        self.vhost = os.getenv("RABBITMQ_VHOST", "/")
+        self.use_ssl = os.getenv("RABBITMQ_USE_SSL", "false").lower() == "true"
         self.queue_name = os.getenv("RABBITMQ_QUEUE", "email_processing")
         
         # Initialize connection variables
@@ -29,15 +35,31 @@ class MessageQueueService:
     async def connect(self) -> bool:
         """Establish connection to RabbitMQ server"""
         try:
-            # Use a connection parameters object
-            credentials = pika.PlainCredentials(self.username, self.password)
-            parameters = pika.ConnectionParameters(
-                host=self.host,
-                port=self.port,
-                credentials=credentials,
-                heartbeat=600,
-                blocked_connection_timeout=300
-            )
+            # Determine which connection method to use
+            if self.url:
+                # Use URL connection (preferred for CloudAMQP)
+                logger.info(f"Connecting to RabbitMQ using URL connection string")
+                parameters = pika.URLParameters(self.url)
+            else:
+                # Use individual parameters
+                logger.info(f"Connecting to RabbitMQ at {self.host}:{self.port}")
+                ssl_options = None
+                if self.use_ssl:
+                    context = ssl.create_default_context()
+                    context.check_hostname = False
+                    context.verify_mode = ssl.CERT_NONE
+                    ssl_options = pika.SSLOptions(context)
+                
+                credentials = pika.PlainCredentials(self.username, self.password)
+                parameters = pika.ConnectionParameters(
+                    host=self.host,
+                    port=self.port,
+                    virtual_host=self.vhost,
+                    credentials=credentials,
+                    ssl_options=ssl_options,
+                    heartbeat=600,
+                    blocked_connection_timeout=300
+                )
             
             # Connect to RabbitMQ
             self.connection = pika.BlockingConnection(parameters)
@@ -47,7 +69,7 @@ class MessageQueueService:
             self.channel.queue_declare(queue=self.queue_name, durable=True)
             
             self.connected = True
-            logger.info(f"Connected to RabbitMQ at {self.host}:{self.port}")
+            logger.info("Successfully connected to RabbitMQ")
             return True
             
         except Exception as e:
