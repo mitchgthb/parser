@@ -78,8 +78,7 @@ netlify.toml
 *.vscode/
 
 # Solution-specific
-Dualite.Models/Requests/
-Dualite.Models/Responses/
+# Keeping request/response models in repository
 Dualite.Python/email_nlp_service/requirements.txt
 Dualite.Python/invoice_parser_service/requirements.txt
 
