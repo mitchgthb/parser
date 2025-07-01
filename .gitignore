@@ -91,6 +91,7 @@ Dualite.Python/invoice_parser_service/requirements.txt
 netlify-env-variables.md
 rapidapi-preparation.md
 netlify-git-integration.md
+*.env
 
 # Ignore test output
 TestResults/
