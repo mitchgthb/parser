@@ -79,8 +79,8 @@ netlify.toml
 
 # Solution-specific
 # Keeping request/response models in repository
-Dualite.Python/email_nlp_service/requirements.txt
-Dualite.Python/invoice_parser_service/requirements.txt
+# Include Python requirements files for deployment
+
 
 # SQLite
 *.sqlite
