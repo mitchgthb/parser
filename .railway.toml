@@ -1,0 +1,11 @@
+[build]
+builder = "nixpacks"
+buildCommand = "echo 'Using Nixpacks for building .NET 8.0 application'"
+
+[deploy]
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 5
+
+[variables]
+DOTNET_EnableDiagnostics = "0"
+AspNetCoreEnvironment = "Production"

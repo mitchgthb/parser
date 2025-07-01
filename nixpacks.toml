@@ -1,0 +1,16 @@
+[phases.setup]
+aptPkgs = ['wget', 'curl']
+
+[phases.build]
+cmds = [
+  'wget https://dot.net/v1/dotnet-install.sh',
+  'chmod +x dotnet-install.sh',
+  './dotnet-install.sh --channel 8.0',
+  'export PATH="$HOME/.dotnet:$PATH"',
+  'dotnet --list-sdks',
+  'dotnet restore',
+  'dotnet build -c Release'
+]
+
+[start]
+cmd = 'dotnet Dualite/bin/Release/net8.0/Dualite.dll'
