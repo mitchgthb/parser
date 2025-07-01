@@ -92,5 +92,8 @@ rapidapi-preparation.md
 netlify-git-integration.md
 *.env
 
+# Ignore sensitive config
+Dualite/appsettings.json
+
 # Ignore test output
 TestResults/
