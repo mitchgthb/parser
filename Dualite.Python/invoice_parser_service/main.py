@@ -43,6 +43,13 @@ app.add_middleware(
 # Initialize services
 invoice_processor = InvoiceProcessor()
 mq_service = MessageQueueService()
+cache = RedisCache()
+
+# -------------------------------------------------------------
+# Simple in-memory store to keep track of jobs and their results
+# NOTE: This is suitable for single-instance deployments only.
+# For production, replace with persistent storage (PostgreSQL/Redis).
+# -------------------------------------------------------------
 
 @app.on_event("startup")
 async def startup_event():
@@ -95,12 +102,28 @@ async def parse_invoice(
         
         # Add job to background tasks
         background_tasks.add_task(process_invoice_task, job_id, file_path)
-        
-        return JobResponse(
+
+        # Persist job in DB
+        db_job_data = {
+            "id": job_id,
+            "client_id": uuid4(),  # TODO: replace with real client id if available
+            "job_type": "invoice",
+            "status": JobStatus.PROCESSING.value,
+            "input_data": {"filename": file.filename},
+        }
+        job_repo = JobRepository(db)
+        await job_repo.create(db_job_data)
+
+        # Build initial response
+        job_resp = JobResponse(
             job_id=job_id,
             status=JobStatus.PROCESSING,
             message="Invoice processing job started"
         )
+
+        # cache in Redis (non-blocking failure)
+        await cache.cache_invoice_result(job_id, job_resp.dict())
+        return job_resp
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -110,31 +133,76 @@ async def parse_invoice(
 @app.get("/jobs/{job_id}", response_model=JobResponse)
 async def get_job_status(job_id: str, db=Depends(get_db)):
     """Get the status of a processing job"""
-    try:
-        # Retrieve job from database
-        # Here would be database logic to fetch the job status
-        # For now, we return a mock response
-        return JobResponse(
-            job_id=job_id,
-            status=JobStatus.COMPLETED,
-            message="Job completed successfully"
-        )
-    except Exception as e:
-        logger.error(f"Error retrieving job status: {str(e)}")
+    # 1. try redis cache
+    cached = await cache.get_invoice_result(job_id)
+    if cached:
+        return JobResponse(**cached)
+
+    # 2. fallback to DB
+    job_repo = JobRepository(db)
+    inv_repo = InvoiceExtractionRepository(db)
+    db_job = await job_repo.get_by_id(job_id)
+    if db_job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    result = None
+    if db_job.invoice_extraction:
+        result = {
+            "invoice_data": db_job.invoice_extraction.extracted_fields or {},
+            "processing_metadata": {
+                "processing_time_ms": db_job.processing_time_ms
+            }
+        }
+    job_resp = JobResponse(
+        job_id=str(db_job.id),
+        status=JobStatus(db_job.status),
+        message=db_job.error_message or "Job completed successfully" if db_job.status=="completed" else "Job in progress",
+        result=result,
+        error=db_job.error_message,
+        processing_time_ms=db_job.processing_time_ms,
+        created_at=db_job.created_at,
+        completed_at=db_job.completed_at
+    )
+    # populate cache
+    await cache.cache_invoice_result(job_id, job_resp.dict())
+    return job_resp
 
 async def process_invoice_task(job_id: str, file_path: str):
     """Background task to process an invoice"""
+    start_ts = time.time()
     try:
         logger.info(f"Processing invoice job {job_id} from {file_path}")
         
         # Process the invoice using the processor
         result = await invoice_processor.process_invoice(file_path)
         
-        # Update job in database as completed
-        # Here would be database logic to update the job
+        processing_time_ms = int((time.time() - start_ts) * 1000)
         
-        logger.info(f"Invoice job {job_id} completed successfully")
+        # Update job status in DB
+        job_repo = JobRepository(SessionLocal())
+        db_job = await job_repo.get_by_id(job_id)
+        db_job.status = JobStatus.COMPLETED.value
+        db_job.processing_time_ms = processing_time_ms
+        db_job.completed_at = datetime.utcnow()
+        await job_repo.update(db_job)
+
+        # Update invoice extraction result in DB
+        inv_repo = InvoiceExtractionRepository(SessionLocal())
+        inv_result = await inv_repo.get_by_job_id(job_id)
+        inv_result.extracted_fields = result
+        await inv_repo.update(inv_result)
+
+        # Update cache
+        job_resp = JobResponse(
+            job_id=job_id,
+            status=JobStatus.COMPLETED,
+            message="Job completed successfully",
+            result=result,
+            processing_time_ms=processing_time_ms,
+            completed_at=datetime.utcnow()
+        )
+        await cache.cache_invoice_result(job_id, job_resp.dict())
+
+        logger.info(f"Invoice job {job_id} completed successfully in {processing_time_ms} ms")
         
         # Cleanup - remove the temporary file
         try:
@@ -144,8 +212,23 @@ async def process_invoice_task(job_id: str, file_path: str):
             
     except Exception as e:
         logger.error(f"Error processing invoice job {job_id}: {str(e)}")
-        # Update job in database as failed
-        # Here would be database logic to update the job
+        # Update job status in DB
+        job_repo = JobRepository(SessionLocal())
+        db_job = await job_repo.get_by_id(job_id)
+        db_job.status = JobStatus.FAILED.value
+        db_job.error_message = str(e)
+        db_job.completed_at = datetime.utcnow()
+        await job_repo.update(db_job)
+
+        # Update cache
+        job_resp = JobResponse(
+            job_id=job_id,
+            status=JobStatus.FAILED,
+            message="Job failed",
+            error=str(e),
+            completed_at=datetime.utcnow()
+        )
+        await cache.cache_invoice_result(job_id, job_resp.dict())
 
 async def process_job(message: Dict[str, Any]):
     """Process a job received from the message queue"""
