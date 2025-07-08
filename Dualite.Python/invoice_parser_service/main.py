@@ -11,6 +11,8 @@ from typing import Dict, Any, Optional, List
 from app.services.invoice_processor import InvoiceProcessor
 from app.services.message_queue import MessageQueueService
 from app.database.db import get_db, SessionLocal
+from app.services.cache import RedisCache
+from datetime import datetime
 from app.models.job import JobResponse, InvoiceData, JobStatus
 
 # Configure logging
