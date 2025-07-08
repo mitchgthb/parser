@@ -12,6 +12,7 @@ from app.services.invoice_processor import InvoiceProcessor
 from app.services.message_queue import MessageQueueService
 from app.database.db import get_db, SessionLocal
 from app.services.cache import RedisCache
+from app.database.repository import JobRepository, InvoiceExtractionRepository
 from datetime import datetime
 from uuid import uuid4
 from app.models.job import JobResponse, InvoiceData, JobStatus
