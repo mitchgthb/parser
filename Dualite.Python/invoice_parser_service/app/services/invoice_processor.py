@@ -177,7 +177,7 @@ class InvoiceProcessor:
             buyer_name_match = re.search(r'To:\s*([^\n]+)', text)
             buyer_name = buyer_name_match.group(1) if buyer_name_match else None
             
-            buyer_kvk_match = re.search(r'KvK:\s*(\d{8})', text, re.SEARCH_FORWARD)
+            buyer_kvk_match = re.search(r'KvK:\s*(\d{8})', text)
             buyer_kvk = buyer_kvk_match.group(1) if buyer_kvk_match else None
             
             # Extract amounts
