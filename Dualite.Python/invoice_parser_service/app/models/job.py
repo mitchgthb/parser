@@ -22,7 +22,7 @@ class InvoiceData(BaseModel):
     vat_rate: Optional[float] = None
     currency: str = "EUR"
     line_items: Optional[List[Dict[str, Any]]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    meta: Optional[Dict[str, Any]] = None
 
 class JobResponse(BaseModel):
     job_id: str

@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS dualite.api_keys (
     last_used_at TIMESTAMP WITH TIME ZONE,
     is_active BOOLEAN DEFAULT TRUE,
     permissions JSONB DEFAULT '{}'::jsonb,
-    metadata JSONB DEFAULT '{}'::jsonb
+    meta JSONB DEFAULT '{}'::jsonb
 );
 
 -- Create index for API key lookups
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS dualite.processing_jobs (
     error_message TEXT,
     priority INTEGER DEFAULT 0,
     processing_time_ms INTEGER,
-    metadata JSONB DEFAULT '{}'::jsonb
+    meta JSONB DEFAULT '{}'::jsonb
 );
 
 -- Create index for job status lookups
@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS dualite.billing_records (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     payment_date TIMESTAMP WITH TIME ZONE,
-    metadata JSONB DEFAULT '{}'::jsonb
+    meta JSONB DEFAULT '{}'::jsonb
 );
 
 -- Create function to update updated_at timestamp

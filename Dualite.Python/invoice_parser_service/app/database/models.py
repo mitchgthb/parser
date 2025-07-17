@@ -22,7 +22,7 @@ class ProcessingJob(Base):
     error_message = Column(Text, nullable=True)
     priority = Column(Integer, default=0)
     processing_time_ms = Column(Integer, nullable=True)
-    metadata = Column(JSONB, default={})
+    meta = Column("meta", JSONB, default={})
     
     # Relationship to Invoice Extraction
     invoice_extraction = relationship("InvoiceExtraction", back_populates="job", uselist=False, cascade="all, delete-orphan")

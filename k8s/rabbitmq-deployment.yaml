@@ -1,6 +1,6 @@
 apiVersion: apps/v1
 kind: StatefulSet
-metadata:
+meta:
   name: rabbitmq
   namespace: dualite
   labels:
@@ -12,7 +12,7 @@ spec:
     matchLabels:
       app: rabbitmq
   template:
-    metadata:
+    meta:
       labels:
         app: rabbitmq
     spec:
@@ -67,7 +67,7 @@ spec:
         configMap:
           name: rabbitmq-config
   volumeClaimTemplates:
-  - metadata:
+  - meta:
       name: rabbitmq-data
     spec:
       accessModes: ["ReadWriteOnce"]
@@ -77,7 +77,7 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata:
+meta:
   name: rabbitmq-service
   namespace: dualite
   labels:
@@ -96,7 +96,7 @@ spec:
 ---
 apiVersion: v1
 kind: ConfigMap
-metadata:
+meta:
   name: rabbitmq-config
   namespace: dualite
 data:

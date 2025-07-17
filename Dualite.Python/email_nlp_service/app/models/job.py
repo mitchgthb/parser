@@ -17,7 +17,7 @@ class EmailData(BaseModel):
     sender_company: Optional[str] = None
     recipients: Optional[List[str]] = None
     date: Optional[datetime.datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
+    meta: Optional[Dict[str, Any]] = None
 
 class JobResponse(BaseModel):
     job_id: str

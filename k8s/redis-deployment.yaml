@@ -1,6 +1,6 @@
 apiVersion: apps/v1
 kind: StatefulSet
-metadata:
+meta:
   name: redis
   namespace: dualite
   labels:
@@ -12,7 +12,7 @@ spec:
     matchLabels:
       app: redis
   template:
-    metadata:
+    meta:
       labels:
         app: redis
     spec:
@@ -68,7 +68,7 @@ spec:
         configMap:
           name: redis-config
   volumeClaimTemplates:
-  - metadata:
+  - meta:
       name: redis-data
     spec:
       accessModes: ["ReadWriteOnce"]
@@ -78,7 +78,7 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata:
+meta:
   name: redis-service
   namespace: dualite
   labels:
@@ -94,7 +94,7 @@ spec:
 ---
 apiVersion: v1
 kind: ConfigMap
-metadata:
+meta:
   name: redis-config
   namespace: dualite
 data:
