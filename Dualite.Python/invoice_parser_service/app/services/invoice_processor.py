@@ -6,11 +6,10 @@ import re
 import tempfile
 from typing import Dict, Any, List, Optional, Tuple
 
-# In a production environment, we would import these libraries
-# import fitz  # PyMuPDF
-# import pdfplumber
-# import pytesseract
-# from PIL import Image
+import fitz  # PyMuPDF
+import pdfplumber
+import pytesseract
+from PIL import Image, ImageOps
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -91,21 +90,23 @@ class InvoiceProcessor:
             }
     
     async def _extract_text_native(self, pdf_path: str) -> Dict[str, Any]:
-        """Extract text from PDF using native PDF parsing"""
-        # In a production environment, this would use PyMuPDF (fitz)
-        # For this demo, we'll simulate the extraction
-        
+        """Extract embedded text from PDF using PyMuPDF (fast path)."""
+        start_ts = time.time()
         try:
-            # Simulated extraction data
-            extracted_text = "INVOICE\nInvoice Number: INV-2023-0042\nDate: 15-06-2023\n\nFrom:\nAcme Supplies B.V.\nKvK: 12345678\nIBAN: NL91ABNA0417164300\n\nTo:\nClient Company\nKvK: 87654321\n\nDescription:\nProduct A - €50.00 x 2 = €100.00\nProduct B - €75.00 x 1 = €75.00\n\nSubtotal: €175.00\nVAT (21%): €36.75\nTotal: €211.75"
-            
+            text_chunks: List[str] = []
+            with fitz.open(pdf_path) as doc:
+                for page in doc:
+                    text_chunks.append(page.get_text("text"))
+            full_text = "\n".join(text_chunks)
+            # Crude confidence: if we extracted >100 chars we assume it's a text PDF.
+            confidence = 1.0 if len(full_text.strip()) > 100 else 0.4
             return {
-                "text": extracted_text,
+                "text": full_text,
                 "method": "native_pdf",
-                "confidence": 0.95,
-                "pages": 1
+                "confidence": confidence,
+                "pages": len(text_chunks),
+                "processing_time_ms": int((time.time() - start_ts) * 1000)
             }
-            
         except Exception as e:
             logger.error(f"Error in native PDF extraction: {str(e)}")
             return {
@@ -116,21 +117,30 @@ class InvoiceProcessor:
             }
     
     async def _extract_text_ocr(self, pdf_path: str) -> Dict[str, Any]:
-        """Extract text from PDF using OCR"""
-        # In a production environment, this would use pytesseract
-        # For this demo, we'll simulate the extraction
-        
+        """Extract text from PDF by rasterising pages and running Tesseract OCR."""
+        start_ts = time.time()
         try:
-            # Simulated OCR extraction (same as native for demo)
-            extracted_text = "INVOICE\nInvoice Number: INV-2023-0042\nDate: 15-06-2023\n\nFrom:\nAcme Supplies B.V.\nKvK: 12345678\nIBAN: NL91ABNA0417164300\n\nTo:\nClient Company\nKvK: 87654321\n\nDescription:\nProduct A - €50.00 x 2 = €100.00\nProduct B - €75.00 x 1 = €75.00\n\nSubtotal: €175.00\nVAT (21%): €36.75\nTotal: €211.75"
-            
+            text_pages: List[str] = []
+            ocr_confidences: List[float] = []
+            with pdfplumber.open(pdf_path) as pdf:
+                for page in pdf.pages:
+                    page_image = page.to_image(resolution=300)  # PIL Image
+                    img: Image.Image = page_image.original
+                    # enhance contrast, convert to grayscale for better OCR
+                    img = ImageOps.grayscale(img)
+                    ocr_result = pytesseract.image_to_string(img, lang="eng")
+                    text_pages.append(ocr_result)
+                    # Tesseract doesn't expose page confidence easily; use heuristic length
+                    ocr_confidences.append(0.7 if len(ocr_result.strip()) > 50 else 0.4)
+            full_text = "\n".join(text_pages)
+            avg_conf = sum(ocr_confidences) / len(ocr_confidences) if ocr_confidences else 0.5
             return {
-                "text": extracted_text,
+                "text": full_text,
                 "method": "ocr",
-                "confidence": 0.85,
-                "pages": 1
+                "confidence": avg_conf,
+                "pages": len(text_pages),
+                "processing_time_ms": int((time.time() - start_ts) * 1000)
             }
-            
         except Exception as e:
             logger.error(f"Error in OCR extraction: {str(e)}")
             return {
