@@ -184,16 +184,37 @@ async def process_invoice_task(job_id: str, file_path: str):
         # Update job status in DB
         job_repo = JobRepository(SessionLocal())
         db_job = await job_repo.get_by_id(job_id)
-        db_job.status = JobStatus.COMPLETED.value
-        db_job.processing_time_ms = processing_time_ms
-        db_job.completed_at = datetime.utcnow()
-        await job_repo.update(db_job)
+        if db_job is None:
+            logger.error(f"Job {job_id} not found in database when trying to update status to COMPLETED")
+            # Create a new job record if it doesn't exist
+            db_job_data = {
+                "id": job_id,
+                "client_id": uuid4(),  # Fallback client ID
+                "job_type": "invoice",
+                "status": JobStatus.COMPLETED.value,
+                "processing_time_ms": processing_time_ms,
+                "completed_at": datetime.utcnow(),
+                "input_data": {"filename": os.path.basename(file_path)},
+            }
+            await job_repo.create(db_job_data)
+        else:
+            db_job.status = JobStatus.COMPLETED.value
+            db_job.processing_time_ms = processing_time_ms
+            db_job.completed_at = datetime.utcnow()
+            await job_repo.update(db_job)
 
         # Update invoice extraction result in DB
         inv_repo = InvoiceExtractionRepository(SessionLocal())
         inv_result = await inv_repo.get_by_job_id(job_id)
-        inv_result.extracted_fields = result
-        await inv_repo.update(inv_result)
+        if inv_result is None:
+            # Create new extraction record if not found
+            await inv_repo.create({
+                "job_id": job_id,
+                "extracted_fields": result
+            })
+        else:
+            inv_result.extracted_fields = result
+            await inv_repo.update(inv_result)
 
         # Update cache
         job_resp = JobResponse(
@@ -219,10 +240,24 @@ async def process_invoice_task(job_id: str, file_path: str):
         # Update job status in DB
         job_repo = JobRepository(SessionLocal())
         db_job = await job_repo.get_by_id(job_id)
-        db_job.status = JobStatus.FAILED.value
-        db_job.error_message = str(e)
-        db_job.completed_at = datetime.utcnow()
-        await job_repo.update(db_job)
+        if db_job is None:
+            logger.error(f"Job {job_id} not found in database when trying to update status to FAILED")
+            # Create a new job record if it doesn't exist
+            db_job_data = {
+                "id": job_id,
+                "client_id": uuid4(),  # Fallback client ID
+                "job_type": "invoice",
+                "status": JobStatus.FAILED.value,
+                "error_message": str(e),
+                "completed_at": datetime.utcnow(),
+                "input_data": {"filename": os.path.basename(file_path)},
+            }
+            await job_repo.create(db_job_data)
+        else:
+            db_job.status = JobStatus.FAILED.value
+            db_job.error_message = str(e)
+            db_job.completed_at = datetime.utcnow()
+            await job_repo.update(db_job)
 
         # Update cache
         job_resp = JobResponse(
