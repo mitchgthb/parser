@@ -13,7 +13,7 @@ from app.services.message_queue import MessageQueueService
 from app.database.db import get_db, SessionLocal
 from app.services.cache import RedisCache
 from app.database.repository import JobRepository, InvoiceExtractionRepository
-from datetime import datetime
+from datetime import datetime, date
 from uuid import uuid4, UUID
 from app.models.job import JobResponse, InvoiceData, JobStatus
 
@@ -224,14 +224,45 @@ async def process_invoice_task(job_id: str, file_path: str):
         # Update invoice extraction result in DB
         inv_repo = InvoiceExtractionRepository(SessionLocal())
         inv_result = await inv_repo.get_by_job_id(job_id)
+
+        # Flatten JSON into scalar columns
+        invoice_json = result.get("invoice_data", {})
+        line_items = invoice_json.get("line_items", [])
+        # Parse date string if provided (supports dd-mm-YYYY or ISO)
+        parsed_date = None
+        invoice_date_str = invoice_json.get("invoice_date")
+        if invoice_date_str:
+            for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
+                try:
+                    parsed_date = datetime.strptime(invoice_date_str, fmt).date()
+                    break
+                except ValueError:
+                    continue
+
+        extraction_data = {
+            "invoice_number": invoice_json.get("invoice_number"),
+            "invoice_date": parsed_date,
+            "seller_name": invoice_json.get("seller_name"),
+            "seller_kvk": invoice_json.get("seller_kvk"),
+            "seller_iban": invoice_json.get("seller_iban"),
+            "buyer_name": invoice_json.get("buyer_name"),
+            "buyer_kvk": invoice_json.get("buyer_kvk"),
+            "total_amount": invoice_json.get("total_amount"),
+            "vat_amount": invoice_json.get("vat_amount"),
+            "vat_rate": invoice_json.get("vat_rate"),
+            "currency": invoice_json.get("currency"),
+            "line_items": line_items,
+            "validation_status": invoice_json.get("validation_status"),
+            "validation_messages": invoice_json.get("validation_messages", []),
+            "extracted_fields": result
+        }
+
         if inv_result is None:
             # Create new extraction record if not found
-            await inv_repo.create({
-                "job_id": UUID(job_id),
-                "extracted_fields": result
-            })
+            extraction_data["job_id"] = UUID(job_id)
+            await inv_repo.create(extraction_data)
         else:
-            await inv_repo.update(inv_result.id, {"extracted_fields": result})
+            await inv_repo.update(inv_result.id, extraction_data)
 
         # Update cache
         job_resp = JobResponse(
