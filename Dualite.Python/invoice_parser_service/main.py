@@ -228,7 +228,6 @@ async def process_invoice_task(job_id: str, file_path: str):
             # Create new extraction record if not found
             await inv_repo.create({
                 "job_id": UUID(job_id),
-                "client_id": DEFAULT_CLIENT_ID,
                 "extracted_fields": result
             })
         else:
