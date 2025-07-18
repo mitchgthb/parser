@@ -105,6 +105,11 @@ async def parse_invoice(
         job_uuid = uuid4()
         job_id = str(job_uuid)  # string for external clients
         friendly_id = f"invoice_{int(time.time())}_{hash(file.filename)}"[:36]
+
+        # Ensure DEFAULT_CLIENT_ID is configured
+        if DEFAULT_CLIENT_ID is None:
+            logger.error("DEFAULT_CLIENT_ID is not set; cannot create job")
+            raise HTTPException(status_code=500, detail="Server configuration error: DEFAULT_CLIENT_ID not set")
         
         # Create temp directory if it doesn't exist
         temp_dir = "./temp"
@@ -121,7 +126,7 @@ async def parse_invoice(
         # Persist job in DB
         db_job_data = {
             "id": UUID(job_id),
-            "client_id": (DEFAULT_CLIENT_ID or uuid4()),
+            "client_id": DEFAULT_CLIENT_ID,
             "job_type": "invoice",
             "status": JobStatus.PROCESSING.value,
             "input_data": {"filename": file.filename, "friendly_id": friendly_id},
@@ -200,7 +205,7 @@ async def process_invoice_task(job_id: str, file_path: str):
             # Create a new job record if it doesn't exist
             db_job_data = {
                 "id": UUID(job_id),
-                "client_id": (DEFAULT_CLIENT_ID or uuid4()),
+                "client_id": DEFAULT_CLIENT_ID,
                 "job_type": "invoice",
                 "status": JobStatus.COMPLETED.value,
                 "processing_time_ms": processing_time_ms,
@@ -220,7 +225,8 @@ async def process_invoice_task(job_id: str, file_path: str):
         if inv_result is None:
             # Create new extraction record if not found
             await inv_repo.create({
-                "job_id": job_id,
+                "job_id": UUID(job_id),
+                "client_id": DEFAULT_CLIENT_ID,
                 "extracted_fields": result
             })
         else:
@@ -256,7 +262,7 @@ async def process_invoice_task(job_id: str, file_path: str):
             # Create a new job record if it doesn't exist
             db_job_data = {
                 "id": UUID(job_id),
-                "client_id": (DEFAULT_CLIENT_ID or uuid4()),
+                "client_id": DEFAULT_CLIENT_ID,
                 "job_type": "invoice",
                 "status": JobStatus.FAILED.value,
                 "error_message": str(e),
