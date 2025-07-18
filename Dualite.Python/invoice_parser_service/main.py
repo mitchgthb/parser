@@ -14,7 +14,7 @@ from app.database.db import get_db, SessionLocal
 from app.services.cache import RedisCache
 from app.database.repository import JobRepository, InvoiceExtractionRepository
 from datetime import datetime
-from uuid import uuid4
+from uuid import uuid4, UUID
 from app.models.job import JobResponse, InvoiceData, JobStatus
 
 # Configure logging
@@ -43,6 +43,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize services
+# Resolve default client id once at startup
+DEFAULT_CLIENT_ID_ENV = os.getenv("DEFAULT_CLIENT_ID")
+try:
+    DEFAULT_CLIENT_ID: Optional[UUID] = UUID(DEFAULT_CLIENT_ID_ENV) if DEFAULT_CLIENT_ID_ENV else None
+except ValueError:
+    logger.error("DEFAULT_CLIENT_ID env var is not a valid UUID – ignoring.")
+    DEFAULT_CLIENT_ID = None
 
 # Initialize services
 invoice_processor = InvoiceProcessor()
@@ -93,7 +102,8 @@ async def parse_invoice(
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
         
         # Generate a UUID job ID (matches DB schema)
-        job_id = str(uuid4())
+        job_uuid = uuid4()
+        job_id = str(job_uuid)  # string for external clients
         friendly_id = f"invoice_{int(time.time())}_{hash(file.filename)}"[:36]
         
         # Create temp directory if it doesn't exist
@@ -110,11 +120,11 @@ async def parse_invoice(
 
         # Persist job in DB
         db_job_data = {
-            "id": job_id,
-            "client_id": uuid4(),  # TODO: replace with real client id if available
+            "id": UUID(job_id),
+            "client_id": (DEFAULT_CLIENT_ID or uuid4()),
             "job_type": "invoice",
             "status": JobStatus.PROCESSING.value,
-            "input_data": {"filename": file.filename},
+            "input_data": {"filename": file.filename, "friendly_id": friendly_id},
         }
         job_repo = JobRepository(db)
         await job_repo.create(db_job_data)
@@ -189,8 +199,8 @@ async def process_invoice_task(job_id: str, file_path: str):
             logger.error(f"Job {job_id} not found in database when trying to update status to COMPLETED")
             # Create a new job record if it doesn't exist
             db_job_data = {
-                "id": job_id,
-                "client_id": uuid4(),  # Fallback client ID
+                "id": UUID(job_id),
+                "client_id": (DEFAULT_CLIENT_ID or uuid4()),
                 "job_type": "invoice",
                 "status": JobStatus.COMPLETED.value,
                 "processing_time_ms": processing_time_ms,
@@ -245,8 +255,8 @@ async def process_invoice_task(job_id: str, file_path: str):
             logger.error(f"Job {job_id} not found in database when trying to update status to FAILED")
             # Create a new job record if it doesn't exist
             db_job_data = {
-                "id": job_id,
-                "client_id": uuid4(),  # Fallback client ID
+                "id": UUID(job_id),
+                "client_id": (DEFAULT_CLIENT_ID or uuid4()),
                 "job_type": "invoice",
                 "status": JobStatus.FAILED.value,
                 "error_message": str(e),
