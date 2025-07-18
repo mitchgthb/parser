@@ -6,6 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     poppler-utils \
     tesseract-ocr \
+    libtesseract-dev \
     libpq-dev \
     build-essential \
     && apt-get clean \

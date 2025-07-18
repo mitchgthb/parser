@@ -7,6 +7,15 @@ import tempfile
 from typing import Dict, Any, List, Optional, Tuple
 
 import fitz  # PyMuPDF
+
+# Optional ML layout extraction
+try:
+    from doctr.models import ocr_predictor
+    from doctr.io import DocumentFile
+    DOCTR_AVAILABLE = True
+    _doctr_model = ocr_predictor(pretrained="db_resnet50")
+except Exception:
+    DOCTR_AVAILABLE = False
 import pdfplumber
 import pytesseract
 from PIL import Image, ImageOps
@@ -61,6 +70,11 @@ class InvoiceProcessor:
                 text_result = self._merge_results(text_result, ocr_result)
             
             # 3. Extract structured data using layout analysis
+            # If confidence still low, attempt Doctr OCR/layout
+            if text_result.get("confidence", 0) < 0.7 and DOCTR_AVAILABLE:
+                doctr_result = await self._extract_text_doctr(pdf_path)
+                text_result = self._merge_results(text_result, doctr_result)
+
             structured_data = await self._extract_structured_data(text_result)
             
             # 4. Validate data according to Dutch tax regulations
@@ -161,6 +175,7 @@ class InvoiceProcessor:
         """Extract structured data from text using regex and layout analysis"""
         try:
             text = text_result.get("text", "")
+            logger.debug("RAW TEXT (first 500 chars):\n%s", text[:500])
             
             # Very basic extraction using regex patterns
             # In production, use more sophisticated NLP and layout analysis
