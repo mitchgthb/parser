@@ -215,9 +215,11 @@ async def process_invoice_task(job_id: str, file_path: str):
             await job_repo.create(db_job_data)
         else:
             db_job.status = JobStatus.COMPLETED.value
-            db_job.processing_time_ms = processing_time_ms
-            db_job.completed_at = datetime.utcnow()
-            await job_repo.update(db_job)
+            await job_repo.update(job_id, {
+                "status": JobStatus.COMPLETED.value,
+                "processing_time_ms": processing_time_ms,
+                "completed_at": datetime.utcnow()
+            })
 
         # Update invoice extraction result in DB
         inv_repo = InvoiceExtractionRepository(SessionLocal())
@@ -230,8 +232,7 @@ async def process_invoice_task(job_id: str, file_path: str):
                 "extracted_fields": result
             })
         else:
-            inv_result.extracted_fields = result
-            await inv_repo.update(inv_result)
+            await inv_repo.update(inv_result.id, {"extracted_fields": result})
 
         # Update cache
         job_resp = JobResponse(
@@ -271,10 +272,7 @@ async def process_invoice_task(job_id: str, file_path: str):
             }
             await job_repo.create(db_job_data)
         else:
-            db_job.status = JobStatus.FAILED.value
-            db_job.error_message = str(e)
-            db_job.completed_at = datetime.utcnow()
-            await job_repo.update(db_job)
+            await job_repo.update_status(db_job.id, JobStatus.FAILED.value, str(e))
 
         # Update cache
         job_resp = JobResponse(
