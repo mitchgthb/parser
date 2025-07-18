@@ -4,7 +4,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
-from .models import Base     # make sure models are imported
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +28,7 @@ try:
     engine = create_engine(DATABASE_URL)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base = declarative_base()
+    from .models import Base     # make sure models are imported
     Base.metadata.create_all(engine)   # creates schema + tables if missing
     logger.info(f"Connected to PostgreSQL database at {DB_HOST}:{DB_PORT}")
 except Exception as e:
