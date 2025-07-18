@@ -92,8 +92,9 @@ async def parse_invoice(
         if not file.filename.lower().endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
         
-        # Generate a job ID
-        job_id = f"invoice_{int(time.time())}_{hash(file.filename)}"[:36]
+        # Generate a UUID job ID (matches DB schema)
+        job_id = str(uuid4())
+        friendly_id = f"invoice_{int(time.time())}_{hash(file.filename)}"[:36]
         
         # Create temp directory if it doesn't exist
         temp_dir = "./temp"

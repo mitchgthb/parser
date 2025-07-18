@@ -49,8 +49,8 @@ class RedisCache:
             # Use provided TTL or default
             expiry = ttl if ttl is not None else self.ttl
             
-            # Convert value to JSON string
-            json_value = json.dumps(value)
+            # Convert value to JSON string, serialize datetime and other non-JSON types as str
+            json_value = json.dumps(value, default=str)
             
             # Set in Redis with expiry
             self.redis.setex(key, expiry, json_value)
