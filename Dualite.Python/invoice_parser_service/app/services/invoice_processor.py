@@ -266,7 +266,8 @@ class InvoiceProcessor:
             validation_status = "invalid"
             validation_messages.append("Missing total amount")
             
-        if not data.get("vat_amount") and data.get("total_amount", 0) > 0:
+        total_val = data.get("total_amount") or 0
+        if data.get("vat_amount") is None and total_val > 0:
             validation_status = "warning"
             validation_messages.append("Missing VAT amount")
             
